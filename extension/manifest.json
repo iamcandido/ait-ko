@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "AiT.KO",
+  "version": "0.1.0",
+  "description": "Natural-language Okta queries, using your already-open admin session.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.okta.com/*",
+    "https://*.oktapreview.com/*",
+    "https://api.anthropic.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.okta.com/*",
+        "https://*.oktapreview.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "AiT.KO: use it from the Okta Admin Console",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}

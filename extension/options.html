@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>AiT.KO – Options</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 460px; margin: 40px auto; padding: 0 16px; color: #1c2430; }
+  label { display: block; margin: 16px 0 4px; font-weight: 600; }
+  input, select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #b8c0cc; border-radius: 4px; font: inherit; }
+  button { margin-top: 16px; padding: 8px 14px; border: 0; border-radius: 4px; background: #1c2430; color: #fff; font: inherit; cursor: pointer; }
+  small { color: #5b6675; }
+</style>
+<h1>AiT.KO</h1>
+<label for="provider">Provider</label>
+<select id="provider">
+  <option value="gemini">Google Gemini (has a free tier)</option>
+  <option value="anthropic">Anthropic Claude</option>
+</select>
+<label for="key">API key</label>
+<input id="key" type="password" autocomplete="off" placeholder="Paste your key here">
+<small>Stored only in this browser. Only the text of your requests is sent.</small>
+<label for="model">Model</label>
+<input id="model" placeholder="Empty = default (gemini-2.5-flash or claude-sonnet-5-5)">
+<button id="save">Save</button> <span id="msg"></span>
+<script src="options.js"></script>
+</html>

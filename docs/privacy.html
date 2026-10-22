@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AiT.KO – Privacy Policy</title>
+<style>
+  :root { --bg: #ffffff; --fg: #1c2430; --muted: #5b6675; --line: #dde2e9; --link: #2f6fed; --code: #f3f5f8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14181f; --fg: #e6eaf0; --muted: #9aa5b4; --line: #2a313c; --link: #7aa2ff; --code: #1d232c; }
+  }
+  html { background: var(--bg); }
+  body { margin: 0 auto; padding: 32px 20px 64px; max-width: 720px; background: var(--bg); color: var(--fg);
+         font: 16px/1.65 Georgia, "Times New Roman", serif; }
+  h1, h2 { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.25; }
+  h1 { font-size: 1.9rem; margin-bottom: 4px; }
+  h2 { font-size: 1.15rem; margin-top: 2.2em; padding-top: .8em; border-top: 1px solid var(--line); }
+  .meta { color: var(--muted); margin-top: 0; }
+  a { color: var(--link); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 3px; font-size: .9em; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font: 14px/1.5 system-ui, sans-serif; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>AiT.KO – Privacy Policy</h1>
+<p class="meta">Last updated: October 22, 2026</p>
+
+<p>AiT.KO is a browser extension that lets Okta administrators describe a user search in plain language, turns it into an Okta search filter, runs it against the administrator's own Okta organization, and lets them export the results to CSV. This policy explains what data the extension handles and where it goes.</p>
+
+<p><strong>In short:</strong> the developer does not operate any server, does not collect any data, and does not receive any data from the extension. The only data that leaves your browser, other than requests to your own Okta organization, is the text of your request and your API key, which are sent to the AI provider that you choose and configure.</p>
+
+<h2>1. Who we are</h2>
+<p>AiT.KO is developed by <strong>Cândido Pereira</strong>. Contact: <a href="mailto:cpereirarui@gmail.com">cpereirarui@gmail.com</a>.</p>
+<p>AiT.KO is an independent project. It is not affiliated with, endorsed by, or sponsored by Okta, Inc., Google LLC, or Anthropic PBC. Those names are used only to describe what the extension works with.</p>
+
+<h2>2. Data the extension handles</h2>
+<div class="tablewrap">
+<table>
+  <thead>
+    <tr><th>Data</th><th>Purpose</th><th>Where it goes</th><th>Stored?</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Okta user data (names, emails, departments, etc.) returned by your Okta organization</td>
+      <td>Shown in the results table and exported to CSV when you click Export</td>
+      <td>Stays in your browser. Requests go only to your own Okta organization, using your already-open admin session. It is not sent to the developer or to any AI provider.</td>
+      <td>Held in memory until you close or reload the page. Not saved by the extension. A CSV file is created on your device only when you export.</td>
+    </tr>
+    <tr>
+      <td>The text you type in the request box</td>
+      <td>Converted into an Okta search filter</td>
+      <td>Sent, together with fixed instructions and today's date, to the AI provider you selected (Google Gemini API or Anthropic Claude API)</td>
+      <td>Not stored by the extension. The provider's own retention rules apply (see section 4).</td>
+    </tr>
+    <tr>
+      <td>Your AI provider API key</td>
+      <td>Authenticating your requests to the provider</td>
+      <td>Sent only to the provider you selected, as an authentication header</td>
+      <td>Stored locally in your browser (<code>chrome.storage.local</code>) until you change or delete it</td>
+    </tr>
+    <tr>
+      <td>Your settings (provider and model name)</td>
+      <td>Remembering your configuration</td>
+      <td>Stays in your browser</td>
+      <td>Stored locally in your browser</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>3. What we do not do</h2>
+<ul>
+  <li>We do not run any server and do not receive, collect, or have access to your data, your requests, or your API key.</li>
+  <li>We do not use analytics, tracking, advertising, or crash-reporting services.</li>
+  <li>We do not sell or transfer user data to third parties, and we do not use it for any purpose unrelated to the extension's single purpose.</li>
+  <li>We do not use or transfer user data to determine creditworthiness or for lending purposes.</li>
+  <li>We do not load or execute remotely hosted code.</li>
+  <li>We do not send Okta user data to AI providers. Only the text of your request is sent.</li>
+</ul>
+<p>The extension's use of information complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.</p>
+
+<h2>4. Third-party AI providers</h2>
+<p>When you click "Generate filter", the text you typed is sent directly from your browser to the provider you selected in the extension options:</p>
+<ul>
+  <li><strong>Google Gemini API</strong>, subject to Google's terms and privacy policy. Please note that Google's terms for free-tier usage may allow content submitted to be used to improve Google's products. Check Google's current Gemini API terms for details.</li>
+  <li><strong>Anthropic Claude API</strong>, subject to Anthropic's commercial terms and privacy policy.</li>
+</ul>
+<p>We do not control how these providers handle data. <strong>Do not include personal data (such as a specific person's name or email address) in your requests</strong> unless you are comfortable with it being processed by the selected provider. Generic requests such as "active users in the Finance department with country code PT" contain no personal data.</p>
+
+<h2>5. Permissions and why they are needed</h2>
+<ul>
+  <li><strong>storage</strong>: to save your API key, provider, and model choice locally.</li>
+  <li><strong>Access to <code>*.okta.com</code> and <code>*.oktapreview.com</code></strong>: to display the AiT.KO panel on the Okta Admin Console and to call your own Okta organization's user API with your existing session. The panel activates only on hostnames that contain <code>-admin.</code>; on all other Okta pages it does nothing.</li>
+  <li><strong>Access to <code>generativelanguage.googleapis.com</code></strong>: to send your request text to the Google Gemini API, if you select that provider.</li>
+  <li><strong>Access to <code>api.anthropic.com</code></strong>: to send your request text to the Anthropic API, if you select that provider.</li>
+</ul>
+
+<h2>6. Security</h2>
+<ul>
+  <li>The extension only performs read (HTTP GET) requests against the Okta user API.</li>
+  <li>The filter produced by the AI provider is validated before it runs: only a fixed set of attributes and search operators is accepted, and anything else is rejected. You can see and edit the filter before running it.</li>
+  <li>Results are rendered as plain text, never as HTML, and CSV exports neutralize spreadsheet formula injection.</li>
+  <li>Your API key is stored in the browser's extension storage, which is not encrypted at rest. Anyone with access to your browser profile on disk could read it. We recommend using a dedicated key that you can revoke at any time.</li>
+</ul>
+
+<h2>7. Retention and deletion</h2>
+<p>The extension keeps no data other than your API key, provider, and model name, all stored locally. You can delete them at any time by clearing the fields on the options page, or by removing the extension, which deletes all of its local data. Data held by an AI provider is governed by that provider's policies.</p>
+
+<h2>8. Children</h2>
+<p>AiT.KO is a tool for IT administrators and is not directed at children.</p>
+
+<h2>9. Changes to this policy</h2>
+<p>If the extension's data practices change, this page will be updated and the "Last updated" date above will change. Material changes will be reflected in the extension's Chrome Web Store listing.</p>
+
+<h2>10. Contact</h2>
+<p>Questions about this policy: <a href="mailto:cpereirarui@gmail.com">cpereirarui@gmail.com</a>.</p>
+
+</body>
+</html>
