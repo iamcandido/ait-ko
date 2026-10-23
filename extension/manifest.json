@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AiT.KO",
-  "version": "0.1.0",
-  "description": "Natural-language Okta queries, using your already-open admin session.",
+  "version": "0.2.0",
+  "description": "Natural-language, read-only queries for the Okta Admin API, using your already-open admin session.",
   "permissions": [
     "storage"
   ],
@@ -19,6 +19,7 @@
         "https://*.oktapreview.com/*"
       ],
       "js": [
+        "lib.js",
         "content.js"
       ],
       "run_at": "document_idle"
