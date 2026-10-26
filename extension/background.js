@@ -21,7 +21,8 @@ Allowed paths (replace {id} with a real id or login; never invent ids):
 
 Allowed query parameters ONLY: search, filter, q, limit, sortBy, sortOrder, expand, since, until, type. Never use "after".
 Inside values, percent-encode & as %26, # as %23, + as %2B and % as %25 (for example "R%26D"). Spaces and double quotes may be written as is.
-Filter/search syntax: attribute operator "value", combined with and / or / not and parentheses. Operators: eq sw co gt ge lt le pr. Dates in ISO 8601 inside quotes.
+Filter/search syntax: attribute operator "value", combined with and / or and parentheses. Operators: eq sw gt ge lt le pr. Dates in ISO 8601 inside quotes.
+IMPORTANT: Okta's user "search" has NO "ne" (not equal) and no "not" operator. For "not equal" write (attr lt "X" or attr gt "X"), e.g. (profile.countryCode lt "PT" or profile.countryCode gt "PT"). This does not match users whose attribute is empty; say so in "summary".
 
 Per resource:
 - users: "search" with attributes status, id, created, lastUpdated, lastLogin, statusChanged, profile.<attr> (login, email, firstName, lastName, department, title, countryCode in uppercase ISO alpha-2, city, organization, manager, employeeNumber...). status: STAGED, PROVISIONED, ACTIVE, RECOVERY, PASSWORD_EXPIRED, LOCKED_OUT, SUSPENDED, DEPROVISIONED. "q" matches the start of first name, last name or email.

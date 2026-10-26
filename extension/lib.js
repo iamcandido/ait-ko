@@ -36,6 +36,16 @@
       t === '"S"' || OPS.has(t) || NUM.test(t) || t === 'true' || t === 'false' || ATTR.test(t));
   }
 
+  // Okta's user `search` has no "ne" operator (HTTP 400). Its documented equivalent is
+  // (attr lt "X" or attr gt "X"). Quoted strings are skipped so values are never touched.
+  // Note: users whose attribute is empty do not match lt/gt, so they are not returned.
+  function rewriteNe(expr) {
+    return expr.replace(
+      /("(?:[^"\\]|\\.)*")|([A-Za-z_][A-Za-z0-9_.]*)\s+ne\s+("(?:[^"\\]|\\.)*")/g,
+      (m, quoted, attr, val) => (quoted ? quoted : `(${attr} lt ${val} or ${attr} gt ${val})`)
+    );
+  }
+
   const noCtl = v => /^[^\u0000-\u001f]{1,200}$/.test(v);
   const PARAMS = {
     search: validExpr,
@@ -62,17 +72,24 @@
     if (!ALLOWED_PATHS.some(re => re.test(u.pathname))) return { error: 'That API path is not on the read-only allowlist.' };
 
     const out = new URLSearchParams();
-    for (const [k, v] of u.searchParams) {
+    for (let [k, v] of u.searchParams) {
       if (!Object.prototype.hasOwnProperty.call(PARAMS, k)) return { error: `Parameter "${k}" is not allowed.` };
+      if (k === 'search') v = rewriteNe(v);
       if (out.has(k)) return { error: `Duplicate parameter "${k}".` };
       if (!PARAMS[k](v)) return { error: `Invalid value for "${k}".` };
       out.set(k, v);
     }
     out.set('limit', String(Math.min(Number(out.get('limit') || MAX_LIMIT), MAX_LIMIT)));
 
+    // "limit" is only the page size (Okta's maximum per call); pagination fetches everything.
+    // The default is not shown, so it doesn't look like a cap on the results.
+    const shown = [...out]
+      .filter(([k, v]) => !(k === 'limit' && Number(v) === MAX_LIMIT))
+      .map(([k, v]) => `${k}=${readable(v)}`)
+      .join('&');
     return {
       url: u.pathname + '?' + out.toString(),
-      display: u.pathname + '?' + [...out].map(([k, v]) => `${k}=${readable(v)}`).join('&')
+      display: u.pathname + (shown ? '?' + shown : '')
     };
   }
 
@@ -115,7 +132,7 @@
     return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
-  const api = { buildRequest, nextLink, redact, getPath, show, autoColumns, csvEscape, validExpr };
+  const api = { rewriteNe, buildRequest, nextLink, redact, getPath, show, autoColumns, csvEscape, validExpr };
   globalThis.AITKO = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

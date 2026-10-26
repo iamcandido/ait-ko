@@ -5,7 +5,7 @@
 
   const { buildRequest, nextLink, redact, getPath, show, autoColumns, csvEscape } = globalThis.AITKO;
   const PREVIEW_ROWS = 50;
-  const MAX_ROWS = 10000;
+  const MAX_ROWS = 50000;
 
   // ---------- UI (Shadow DOM so it doesn't clash with the console's styles) ----------
   const host = document.createElement('div');
@@ -131,7 +131,10 @@
     $('#run').disabled = true;
     $('#stop').hidden = false;
 
+    const pageSize = Number(new URLSearchParams(built.url.split('?')[1]).get('limit'));
+    const plural = n => (n === 1 ? '' : 's');
     let url = built.url;
+    let pages = 0;
     let note = '';
     try {
       while (url) {
@@ -149,17 +152,28 @@
         }
         if (r.status === 401 || r.status === 403) throw new Error('No permission or session expired. Reload the console.');
         if (r.status === 404) throw new Error('Not found. Check the id in the request.');
-        if (!r.ok) throw new Error('Okta returned HTTP ' + r.status);
+        if (!r.ok) {
+          let detail = '';
+          try { const e = await r.json(); if (e && e.errorSummary) detail = ': ' + e.errorSummary; } catch { /* no JSON body */ }
+          throw new Error('Okta returned HTTP ' + r.status + detail);
+        }
 
         const data = await r.json();
-        if (!Array.isArray(data)) { rows.push(redact(data)); break; } // single object
-        if (data.length === 0) break;                                 // also stops /logs, whose "next" link never ends
+        if (!Array.isArray(data)) { rows.push(redact(data)); pages = 1; break; } // single object
+        if (data.length === 0) break;                                            // also stops /logs, whose "next" link never ends
+        pages++;
         rows.push(...data.map(redact));
-        if (rows.length >= MAX_ROWS) { rows = rows.slice(0, MAX_ROWS); note = ` (stopped at the ${MAX_ROWS}-row limit)`; break; }
-        setStatus(rows.length + ' rows…');
+        if (rows.length >= MAX_ROWS) {
+          rows = rows.slice(0, MAX_ROWS);
+          note = ` (stopped at the ${MAX_ROWS}-row limit; narrow the query to see the rest)`;
+          break;
+        }
+        setStatus(`${rows.length} rows (${pages} page${plural(pages)})…`);
         url = nextLink(r.headers.get('link'));
       }
-      setStatus(rows.length + ' rows found' + note + '.');
+      let msg = `${rows.length} rows found in ${pages} page${plural(pages)}${note}.`;
+      if (pages === 1 && rows.length === pageSize) msg += ' Okta sent no next-page link, so there may be more results.';
+      setStatus(msg);
     } catch (e) {
       if (e.name === 'AbortError') setStatus('Stopped. Keeping ' + rows.length + ' rows.');
       else setStatus(String(e.message || e), true);

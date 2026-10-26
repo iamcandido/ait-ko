@@ -1,18 +1,19 @@
 # AiT.KO
 
-Natural-language user queries for the Okta Admin Console. Describe a search in plain language
-(for example "active users in the Finance department with countryCode PT"), review the generated
-Okta search filter, run it with your existing admin session (no API token), and export the results to CSV.
+Natural-language, read-only queries for the Okta Admin API, from inside the Okta Admin Console.
+Describe what you want in plain language (for example "active users in the Finance department with
+countryCode PT", "apps assigned to group 00g1abc", or "failed sign-ins in the last 24 hours"),
+review the generated request, run it with your existing admin session (no API token), and export the results to CSV or JSON.
 
 AiT.KO is an independent project. It is not affiliated with, endorsed by, or sponsored by Okta, Google, or Anthropic.
 
 ## How it works
 
 1. You type a request. The text (and nothing else) is sent to the AI provider you configured
-   (Google Gemini or Anthropic Claude) to produce an Okta `search` filter.
-2. The filter is validated locally: read-only, known attributes and operators only. You can edit it.
-3. The extension calls your own Okta org's `/api/v1/users` endpoint using your open admin session.
-4. Results are shown in a table and can be exported to CSV. Okta user data is never sent to the AI provider.
+   (Google Gemini or Anthropic Claude) to produce a read-only Okta API request.
+2. The request is validated locally against a read-only allowlist of paths, parameters, and operators. You can edit it.
+3. The extension calls your own Okta org's Admin API with a GET, using your open admin session.
+4. Results are shown in a table and can be exported to CSV or JSON. Okta data is never sent to the AI provider.
 
 ## Install (developer mode)
 
@@ -28,7 +29,10 @@ See the [privacy policy](https://iamcandido.github.io/ait-ko/privacy.html).
 ## Notes
 
 - The API key is stored in `chrome.storage.local`, which is not encrypted at rest. Use a dedicated, revocable key.
-- Only HTTP GET requests are made against Okta.
+- Only HTTP GET requests are made against Okta, and only to allowlisted resources: users, groups, apps, system log, policies,
+  authorization servers, IdPs, network zones, hooks, trusted origins, devices, domains, org and schemas.
+- Fields that look like secrets (client secrets, passwords, API keys) are redacted from results and exports.
+- Looking up members of a group or users of an app needs the object's id; ask for the list first, then use the id.
 
 ## License
 

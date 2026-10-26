@@ -27,9 +27,9 @@
 <body>
 
 <h1>AiT.KO – Privacy Policy</h1>
-<p class="meta">Last updated: October 22, 2026</p>
+<p class="meta">Last updated: October 26, 2026</p>
 
-<p>AiT.KO is a browser extension that lets Okta administrators describe a user search in plain language, turns it into an Okta search filter, runs it against the administrator's own Okta organization, and lets them export the results to CSV. This policy explains what data the extension handles and where it goes.</p>
+<p>AiT.KO is a browser extension that lets Okta administrators describe what they want to look up in the Okta Admin API (for example users, groups, applications, or system log events) in plain language. It turns the request into a read-only API request, runs it against the administrator's own Okta organization, and lets them export the results to CSV or JSON. This policy explains what data the extension handles and where it goes.</p>
 
 <p><strong>In short:</strong> the developer does not operate any server, does not collect any data, and does not receive any data from the extension. The only data that leaves your browser, other than requests to your own Okta organization, is the text of your request and your API key, which are sent to the AI provider that you choose and configure.</p>
 
@@ -45,14 +45,14 @@
   </thead>
   <tbody>
     <tr>
-      <td>Okta user data (names, emails, departments, etc.) returned by your Okta organization</td>
-      <td>Shown in the results table and exported to CSV when you click Export</td>
+      <td>Okta data (for example users, groups, applications, or log events) returned by your Okta organization</td>
+      <td>Shown in the results table and exported to CSV or JSON when you click Export</td>
       <td>Stays in your browser. Requests go only to your own Okta organization, using your already-open admin session. It is not sent to the developer or to any AI provider.</td>
-      <td>Held in memory until you close or reload the page. Not saved by the extension. A CSV file is created on your device only when you export.</td>
+      <td>Held in memory until you close or reload the page. Not saved by the extension. A CSV or JSON file is created on your device only when you export.</td>
     </tr>
     <tr>
       <td>The text you type in the request box</td>
-      <td>Converted into an Okta search filter</td>
+      <td>Converted into a read-only Okta API request</td>
       <td>Sent, together with fixed instructions and today's date, to the AI provider you selected (Google Gemini API or Anthropic Claude API)</td>
       <td>Not stored by the extension. The provider's own retention rules apply (see section 4).</td>
     </tr>
@@ -79,12 +79,12 @@
   <li>We do not sell or transfer user data to third parties, and we do not use it for any purpose unrelated to the extension's single purpose.</li>
   <li>We do not use or transfer user data to determine creditworthiness or for lending purposes.</li>
   <li>We do not load or execute remotely hosted code.</li>
-  <li>We do not send Okta user data to AI providers. Only the text of your request is sent.</li>
+  <li>We do not send Okta data to AI providers. Only the text of your request is sent.</li>
 </ul>
 <p>The extension's use of information complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.</p>
 
 <h2>4. Third-party AI providers</h2>
-<p>When you click "Generate filter", the text you typed is sent directly from your browser to the provider you selected in the extension options:</p>
+<p>When you click "Generate request", the text you typed is sent directly from your browser to the provider you selected in the extension options:</p>
 <ul>
   <li><strong>Google Gemini API</strong>, subject to Google's terms and privacy policy. Please note that Google's terms for free-tier usage may allow content submitted to be used to improve Google's products. Check Google's current Gemini API terms for details.</li>
   <li><strong>Anthropic Claude API</strong>, subject to Anthropic's commercial terms and privacy policy.</li>
@@ -94,15 +94,16 @@
 <h2>5. Permissions and why they are needed</h2>
 <ul>
   <li><strong>storage</strong>: to save your API key, provider, and model choice locally.</li>
-  <li><strong>Access to <code>*.okta.com</code> and <code>*.oktapreview.com</code></strong>: to display the AiT.KO panel on the Okta Admin Console and to call your own Okta organization's user API with your existing session. The panel activates only on hostnames that contain <code>-admin.</code>; on all other Okta pages it does nothing.</li>
+  <li><strong>Access to <code>*.okta.com</code> and <code>*.oktapreview.com</code></strong>: to display the AiT.KO panel on the Okta Admin Console and to call your own Okta organization's read-only Admin API with your existing session. The panel activates only on hostnames that contain <code>-admin.</code>; on all other Okta pages it does nothing.</li>
   <li><strong>Access to <code>generativelanguage.googleapis.com</code></strong>: to send your request text to the Google Gemini API, if you select that provider.</li>
   <li><strong>Access to <code>api.anthropic.com</code></strong>: to send your request text to the Anthropic API, if you select that provider.</li>
 </ul>
 
 <h2>6. Security</h2>
 <ul>
-  <li>The extension only performs read (HTTP GET) requests against the Okta user API.</li>
-  <li>The filter produced by the AI provider is validated before it runs: only a fixed set of attributes and search operators is accepted, and anything else is rejected. You can see and edit the filter before running it.</li>
+  <li>The extension only performs read (HTTP GET) requests against the Okta Admin API, limited to a fixed allowlist of resource paths (such as users, groups, applications, system log, and policies). It never creates, changes, or deletes anything in your Okta organization.</li>
+  <li>The request produced by the AI provider is treated as untrusted and validated before it runs: only allowlisted paths, query parameters, and search operators are accepted, and anything else is rejected. You can see and edit the request before running it, and it is validated again when you run it.</li>
+  <li>As a precaution, response fields whose names look like secrets (for example client secrets, passwords, or API keys) are replaced with "[redacted]" before results are displayed or exported.</li>
   <li>Results are rendered as plain text, never as HTML, and CSV exports neutralize spreadsheet formula injection.</li>
   <li>Your API key is stored in the browser's extension storage, which is not encrypted at rest. Anyone with access to your browser profile on disk could read it. We recommend using a dedicated key that you can revoke at any time.</li>
 </ul>
