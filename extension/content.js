@@ -3,9 +3,13 @@
   // The manifest pattern matches all of *.okta.com; we only want the Admin Console.
   if (!/-admin\./.test(location.hostname)) return;
 
-  const { buildRequest, nextLink, redact, getPath, show, autoColumns, csvEscape } = globalThis.AITKO;
+  const {
+    buildRequest, nextLink, redact, getPath, show, autoColumns, csvEscape,
+    parseLocalFilters, matchesLocal, describeLocal
+  } = globalThis.AITKO;
   const PREVIEW_ROWS = 50;
-  const MAX_ROWS = 50000;
+  const MAX_ROWS = 50000;       // matching rows kept in memory
+  const MAX_FETCHED = 200000;   // records scanned before stopping (matters when a local filter is used)
 
   // ---------- UI (Shadow DOM so it doesn't clash with the console's styles) ----------
   const host = document.createElement('div');
@@ -53,6 +57,7 @@
             <div class="hint" id="summary"></div>
             <label class="small" for="expr">Request (read-only GET, editable)</label>
             <input class="q" id="expr" spellcheck="false">
+            <div class="hint" id="local" style="margin-top:6px" hidden></div>
             <div class="row" style="margin-top:8px">
               <button class="act primary" id="run">Run</button>
               <button class="act" id="stop" hidden>Stop</button>
@@ -62,6 +67,7 @@
           </div>
 
           <div id="status" class="hint" role="status"></div>
+          <div class="row"><button class="act" id="settings" hidden>Open AiT.KO settings</button></div>
           <div class="tbl" id="tblBox" hidden><table id="tbl"></table></div>
         </div>
       </section>
@@ -72,6 +78,7 @@
   let rows = [];
   let columns = [];
   let activeCols = [];
+  let localFilters = [];
   let ctrl = null;
 
   $('#open').onclick = () => { wrap.classList.add('open'); $('#prompt').focus(); };
@@ -81,6 +88,7 @@
   $('#stop').onclick = () => ctrl && ctrl.abort();
   $('#csv').onclick = exportCsv;
   $('#json').onclick = exportJson;
+  $('#settings').onclick = () => chrome.runtime.sendMessage({ type: 'openOptions' });
   $('#prompt').addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onTranslate();
   });
@@ -98,8 +106,12 @@
     if (!prompt) return;
     setStatus('Generating request…');
     $('#planBox').hidden = true;
+    $('#settings').hidden = true;
     const res = await chrome.runtime.sendMessage({ type: 'translate', prompt });
-    if (!res?.ok) return setStatus(res?.error || 'Unknown error.', true);
+    if (!res?.ok) {
+      $('#settings').hidden = !res?.code;   // key problems: offer a shortcut to the settings
+      return setStatus(res?.error || 'Unknown error.', true);
+    }
 
     const plan = res.plan || {};
     if (!plan.request) return setStatus(plan.clarification || "Couldn't understand the request.", true);
@@ -107,6 +119,12 @@
     // The AI output is untrusted: it is re-validated against the read-only allowlist.
     const built = buildRequest(plan.request, location.origin);
     if (built.error) return setStatus('The generated request was rejected: ' + built.error + ' Rephrase your request.', true);
+
+    const lf = parseLocalFilters(plan.local_filter);
+    if (lf.error) return setStatus('The generated request was rejected: ' + lf.error + ' Rephrase your request.', true);
+    localFilters = lf.filters;
+    $('#local').hidden = !localFilters.length;
+    $('#local').textContent = localFilters.length ? 'Then filtered in your browser: ' + describeLocal(localFilters) : '';
 
     columns = (Array.isArray(plan.columns) ? plan.columns : [])
       .filter(c => typeof c === 'string' && /^[A-Za-z0-9_.]{1,80}$/.test(c))
@@ -131,11 +149,16 @@
     $('#run').disabled = true;
     $('#stop').hidden = false;
 
+    const local = localFilters; // snapshot for this run
     const pageSize = Number(new URLSearchParams(built.url.split('?')[1]).get('limit'));
     const plural = n => (n === 1 ? '' : 's');
     let url = built.url;
     let pages = 0;
+    let fetched = 0;
     let note = '';
+    const summary = () => local.length
+      ? `${rows.length} matching rows (scanned ${fetched} in ${pages} page${plural(pages)})`
+      : `${rows.length} rows found in ${pages} page${plural(pages)}`;
     try {
       while (url) {
         const r = await fetch(url, {
@@ -159,20 +182,31 @@
         }
 
         const data = await r.json();
-        if (!Array.isArray(data)) { rows.push(redact(data)); pages = 1; break; } // single object
+        if (!Array.isArray(data)) {                                              // single object
+          const o = redact(data);
+          fetched = 1; pages = 1;
+          if (!local.length || matchesLocal(o, local)) rows.push(o);
+          break;
+        }
         if (data.length === 0) break;                                            // also stops /logs, whose "next" link never ends
         pages++;
-        rows.push(...data.map(redact));
+        const page = data.map(redact);                                           // redact first, then filter locally
+        fetched += page.length;
+        rows.push(...(local.length ? page.filter(o => matchesLocal(o, local)) : page));
         if (rows.length >= MAX_ROWS) {
           rows = rows.slice(0, MAX_ROWS);
           note = ` (stopped at the ${MAX_ROWS}-row limit; narrow the query to see the rest)`;
           break;
         }
-        setStatus(`${rows.length} rows (${pages} page${plural(pages)})…`);
+        if (fetched >= MAX_FETCHED) {
+          note = ` (stopped after scanning ${MAX_FETCHED} records; narrow the query to see the rest)`;
+          break;
+        }
+        setStatus(summary() + '…');
         url = nextLink(r.headers.get('link'));
       }
-      let msg = `${rows.length} rows found in ${pages} page${plural(pages)}${note}.`;
-      if (pages === 1 && rows.length === pageSize) msg += ' Okta sent no next-page link, so there may be more results.';
+      let msg = summary() + note + '.';
+      if (pages === 1 && fetched === pageSize) msg += ' Okta sent no next-page link, so there may be more results.';
       setStatus(msg);
     } catch (e) {
       if (e.name === 'AbortError') setStatus('Stopped. Keeping ' + rows.length + ' rows.');

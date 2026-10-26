@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>AiT.KO</title>
+<style>
+  body { width: 320px; margin: 0; padding: 14px; font: 13px/1.45 system-ui, sans-serif; color: #1c2430; }
+  h1 { font-size: 15px; margin: 0 0 8px; }
+  label { display: block; margin: 10px 0 4px; font-weight: 600; }
+  input { width: 100%; box-sizing: border-box; padding: 7px; border: 1px solid #b8c0cc; border-radius: 4px; font: inherit; }
+  input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #2f6fed; outline-offset: 2px; }
+  button { margin-top: 10px; padding: 7px 12px; border: 0; border-radius: 4px; background: #2f6fed; color: #fff; font: inherit; cursor: pointer; }
+  button.secondary { background: #fff; color: #1c2430; border: 1px solid #1c2430; }
+  .muted { color: #5b6675; }
+  .err { color: #b3261e; }
+  .ok { color: #1b6e3c; }
+  p { margin: 4px 0; }
+  [hidden] { display: none !important; }
+</style>
+<h1>AiT.KO</h1>
+<p id="state" class="muted"></p>
+
+<div id="enter" hidden>
+  <label for="key">API key</label>
+  <input id="key" type="password" autocomplete="off" placeholder="Paste your key here">
+  <button id="useKey">Use for this browser session</button>
+</div>
+
+<div id="unlock" hidden>
+  <label for="pass">Passphrase</label>
+  <input id="pass" type="password" autocomplete="off">
+  <button id="unlockBtn">Unlock</button>
+</div>
+
+<div id="active" hidden>
+  <button id="lockBtn" class="secondary">Lock now</button>
+</div>
+
+<p id="msg" role="status"></p>
+<p><a href="#" id="settings">Settings…</a></p>
+<script src="keystore.js"></script>
+<script src="popup.js"></script>
+</html>
