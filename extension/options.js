@@ -48,6 +48,16 @@ $('save').onclick = async () => {
   await load();
 };
 
+$('listModels').onclick = async () => {
+  const msg = $('modelsMsg');
+  msg.textContent = 'Loading…'; msg.className = '';
+  const res = await chrome.runtime.sendMessage({ type: 'listModels', provider: $('provider').value, apiKey: $('key').value.trim() });
+  if (!res || !res.ok) { msg.textContent = (res && res.error) || 'Could not list models.'; msg.className = 'err'; return; }
+  $('modelList').replaceChildren(...res.models.map(m => { const opt = document.createElement('option'); opt.value = m; return opt; }));
+  msg.textContent = `${res.models.length} models found. Click the Model field to pick one.`;
+  msg.className = 'ok';
+};
+
 $('forget').onclick = async () => {
   if (!confirm('Forget the API key everywhere (memory and disk)?')) return;
   await ks.forget();

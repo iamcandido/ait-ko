@@ -49,8 +49,17 @@ If the request is ambiguous or unsupported, return "request": null and explain i
 // Only extension pages and this service worker can read chrome.storage.session; make that explicit.
 try { chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {}); } catch { /* older Chrome */ }
 
+const DEFAULT_CLAUDE = 'claude-sonnet-5-5';
+const MODEL_CACHE_TTL = 7 * 24 * 3600 * 1000;   // how long an automatically chosen Gemini model is reused
+const MODEL_HINT = ' Choose another model in the AiT.KO settings ("List available models").';
+
 class KeyError extends Error {
   constructor(message, code) { super(message); this.code = code; }
+}
+
+// Error from a provider API. "code" makes the panel offer a shortcut to the settings.
+class ApiError extends Error {
+  constructor(message, status, code) { super(message); this.status = status; this.code = code; }
 }
 
 // Where the key lives depends on the mode the user chose (see keystore.js).
@@ -62,33 +71,129 @@ async function getActiveKey() {
   return { mode, key: S.apiKey || '', stored: mode === 'encrypted' ? !!L.encKey : false };
 }
 
+// The API key, or an error that tells the user how to provide it.
+async function requireKey() {
+  const { mode, key, stored } = await getActiveKey();
+  if (key) return key;
+  if (mode === 'encrypted' && stored) throw new KeyError('The API key is locked. Click the AiT.KO toolbar icon to unlock it.', 'LOCKED');
+  if (mode === 'session') throw new KeyError('No API key for this browser session. Click the AiT.KO toolbar icon to enter it.', 'NO_KEY');
+  throw new KeyError('Missing API key. Open the AiT.KO settings.', 'NO_KEY');
+}
+
+function reply(sendResponse, promise, wrap) {
+  promise
+    .then(v => sendResponse(wrap(v)))
+    .catch(err => sendResponse({ ok: false, error: String(err.message || err), code: err.code }));
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'openOptions') { chrome.runtime.openOptionsPage(); return; }
-  if (msg?.type !== 'translate') return;
-  translate(msg.prompt)
-    .then(plan => sendResponse({ ok: true, plan }))
-    .catch(err => sendResponse({ ok: false, error: String(err.message || err), code: err.code }));
-  return true; // async response
+  if (msg?.type === 'translate') { reply(sendResponse, translate(msg.prompt), plan => ({ ok: true, plan })); return true; }
+  if (msg?.type === 'listModels') { reply(sendResponse, listModels(msg.provider, msg.apiKey), models => ({ ok: true, models })); return true; }
 });
 
 async function translate(prompt) {
   const { provider, model } = await chrome.storage.local.get(['provider', 'model']);
-  const { mode, key: apiKey, stored } = await getActiveKey();
-  if (!apiKey) {
-    if (mode === 'encrypted' && stored) throw new KeyError('The API key is locked. Click the AiT.KO toolbar icon to unlock it.', 'LOCKED');
-    if (mode === 'session') throw new KeyError('No API key for this browser session. Click the AiT.KO toolbar icon to enter it.', 'NO_KEY');
-    throw new KeyError('Missing API key. Open the AiT.KO settings.', 'NO_KEY');
-  }
-
+  const apiKey = await requireKey();
   const system = `${SYSTEM}\nToday's date and time (UTC): ${new Date().toISOString()}.`;
   const user = String(prompt).slice(0, 2000);
-  const text = provider === 'anthropic'
-    ? await callClaude(apiKey, model || 'claude-sonnet-5-5', system, user)
-    : await callGemini(apiKey, model || 'gemini-2.5-flash', system, user);
+  const chosen = (model || '').trim();   // empty = automatic
 
+  let text;
+  try {
+    text = provider === 'anthropic'
+      ? await callClaude(apiKey, chosen || DEFAULT_CLAUDE, system, user)
+      : await callGemini(apiKey, chosen || await resolveGeminiModel(apiKey), system, user);
+  } catch (e) {
+    if (e.status !== 404) throw e;
+    if (provider !== 'anthropic' && !chosen) {
+      // The automatically chosen model was retired in the meantime: pick again, once.
+      try { text = await callGemini(apiKey, await resolveGeminiModel(apiKey, true), system, user); }
+      catch (e2) { if (e2.status === 404) e2.message += MODEL_HINT; throw e2; }
+    } else {
+      e.message += MODEL_HINT;
+      throw e;
+    }
+  }
   return JSON.parse(text.replace(/```json|```/g, '').trim());
 }
 
+// ---------- Errors with the provider's own explanation ----------
+async function httpError(res, label) {
+  let detail = '';
+  try {
+    const e = await res.json();
+    const m = e && e.error && e.error.message;
+    if (m) detail = ': ' + String(m).slice(0, 300);
+  } catch { /* no JSON body */ }
+  let code;
+  if (res.status === 404) code = 'MODEL';
+  else if (res.status === 401 || res.status === 403 || (res.status === 400 && /api key/i.test(detail))) code = 'KEY';
+  return new ApiError(`${label}: HTTP ${res.status}${detail}`, res.status, code);
+}
+
+// ---------- Gemini: pick a model that exists for this key ----------
+// Google retires and restricts models quickly, so a hardcoded name goes stale. When the user leaves the
+// model empty, ask the API which models this key can use and take the newest stable Flash model.
+const NOT_TEXT = /(tts|image|live|audio|embedding|robotics|computer-use|native|veo|imagen|transcribe)/i;
+
+async function listGeminiModels(apiKey) {
+  const ids = [];
+  let token = '';
+  for (let page = 0; page < 5; page++) {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=200' +
+      (token ? '&pageToken=' + encodeURIComponent(token) : '');
+    const res = await fetch(url, { headers: { 'x-goog-api-key': apiKey } });
+    if (!res.ok) throw await httpError(res, 'Gemini API');
+    const data = await res.json();
+    for (const m of data.models || []) {
+      if ((m.supportedGenerationMethods || []).includes('generateContent')) ids.push(String(m.name).replace(/^models\//, ''));
+    }
+    token = data.nextPageToken || '';
+    if (!token) break;
+  }
+  return ids.filter(id => /^gemini-/.test(id) && !NOT_TEXT.test(id));
+}
+
+function pickGeminiModel(ids) {
+  const flash = ids
+    .map(id => { const m = id.match(/^gemini-(\d+)(?:\.(\d+))?-flash$/); return m ? { id, v: [Number(m[1]), Number(m[2] || 0)] } : null; })
+    .filter(Boolean)
+    .sort((a, b) => b.v[0] - a.v[0] || b.v[1] - a.v[1]);
+  if (flash.length) return flash[0].id;
+  const lite = ids.filter(id => /^gemini-[\d.]+-flash-lite$/.test(id)).sort().pop();
+  if (lite) return lite;
+  if (ids.includes('gemini-flash-latest')) return 'gemini-flash-latest';
+  const any = ids.find(id => /flash/.test(id));
+  if (any) return any;
+  throw new ApiError('No suitable Gemini model was found for this key.' + MODEL_HINT, 404, 'MODEL');
+}
+
+async function resolveGeminiModel(apiKey, force = false) {
+  const { geminiAutoModel } = await chrome.storage.local.get('geminiAutoModel');
+  if (!force && geminiAutoModel && geminiAutoModel.name && Date.now() - geminiAutoModel.at < MODEL_CACHE_TTL) return geminiAutoModel.name;
+  const name = pickGeminiModel(await listGeminiModels(apiKey));
+  await chrome.storage.local.set({ geminiAutoModel: { name, at: Date.now() } });
+  return name;
+}
+
+// Used by the options page. A key typed there but not saved yet can be tested directly.
+async function listModels(provider, typedKey) {
+  const apiKey = (typeof typedKey === 'string' && typedKey.trim()) || await requireKey();
+  let ids;
+  if (provider === 'anthropic') {
+    const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }
+    });
+    if (!res.ok) throw await httpError(res, 'Claude API');
+    ids = ((await res.json()).data || []).map(m => m.id).filter(Boolean);
+  } else {
+    ids = await listGeminiModels(apiKey);
+  }
+  return [...new Set(ids)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+}
+
+// ---------- Providers ----------
 async function callGemini(apiKey, model, system, user) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -102,7 +207,7 @@ async function callGemini(apiKey, model, system, user) {
       })
     }
   );
-  if (!res.ok) throw new Error(`Gemini API: HTTP ${res.status}`);
+  if (!res.ok) throw await httpError(res, 'Gemini API');
   const data = await res.json();
   return (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
 }
@@ -118,7 +223,7 @@ async function callClaude(apiKey, model, system, user) {
     },
     body: JSON.stringify({ model, max_tokens: 800, system, messages: [{ role: 'user', content: user }] })
   });
-  if (!res.ok) throw new Error(`Claude API: HTTP ${res.status}`);
+  if (!res.ok) throw await httpError(res, 'Claude API');
   const data = await res.json();
   return (data.content || []).map(b => b.text || '').join('');
 }

@@ -10,18 +10,19 @@ const mkStore = () => { const d = {}; return { d,
 
 function page(scriptFile, ids) {
   const local = mkStore(), session = mkStore();
-  const el = {}; ids.forEach(id => { el[id] = { id, hidden: false, textContent: '', value: '', checked: false, className: '', placeholder: '', onclick: null, handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } }; });
+  const el = {}; ids.forEach(id => { el[id] = { id, children: [], replaceChildren(...c) { this.children = c; }, hidden: false, textContent: '', value: '', checked: false, className: '', placeholder: '', onclick: null, handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } }; });
   const radios = ['session', 'encrypted', 'plain'].map(v => ({ value: v, checked: false, handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } }));
-  let opened = false, confirmAnswer = true;
+  let opened = false, confirmAnswer = true, nextReply = undefined; const sent = [];
   const ctx = {
-    chrome: { storage: { local, session }, runtime: { openOptionsPage: () => { opened = true; } } },
+    chrome: { storage: { local, session }, runtime: { openOptionsPage: () => { opened = true; }, sendMessage: async m => { sent.push(m); return nextReply; } } },
     document: {
       getElementById: id => { assert(el[id], 'element #' + id + ' missing from the page'); return el[id]; },
       querySelector: sel => {
         if (sel === 'input[name="mode"]:checked') return radios.find(r => r.checked) || null;
         const m = sel.match(/value="(\w+)"/); return m ? radios.find(r => r.value === m[1]) : null;
       },
-      querySelectorAll: () => radios
+      querySelectorAll: () => radios,
+      createElement: () => ({ value: '' })
     },
     confirm: () => confirmAnswer,
     crypto: webcrypto, TextEncoder, TextDecoder, btoa, atob, Uint8Array, Number, String, Error, JSON, Object, Array, Promise, console, setTimeout
@@ -29,7 +30,7 @@ function page(scriptFile, ids) {
   vm.createContext(ctx);
   vm.runInContext(ext('keystore.js'), ctx);
   vm.runInContext(ext(scriptFile), ctx);
-  return { el, radios, local, session, opened: () => opened, setConfirm: v => { confirmAnswer = v; } };
+  return { el, radios, local, session, sent, reply: v => { nextReply = v; }, opened: () => opened, setConfirm: v => { confirmAnswer = v; } };
 }
 
 // every id used by a script must exist in its html, and vice versa for the ones scripts touch
@@ -81,7 +82,7 @@ for (const [html, js] of [['popup.html', 'popup.js'], ['options.html', 'options.
   assert.strictEqual(p.opened(), true);
 
   // ================= options =================
-  const O = ['legacy', 'provider', 'model', 'key', 'encFields', 'pass1', 'pass2', 'plainFields', 'plainOk', 'save', 'forget', 'msg'];
+  const O = ['legacy', 'provider', 'model', 'modelList', 'listModels', 'modelsMsg', 'key', 'encFields', 'pass1', 'pass2', 'plainFields', 'plainOk', 'save', 'forget', 'msg'];
   let o = page('options.js', O); await tick();
   assert.strictEqual(o.radios.find(r => r.checked).value, 'session', 'default mode is session');
   assert.strictEqual(o.el.legacy.hidden, true);
@@ -117,6 +118,20 @@ for (const [html, js] of [['popup.html', 'popup.js'], ['options.html', 'options.
   assert.strictEqual(o.local.d.apiKey, 'K1', 'cancelled: nothing removed');
   o.setConfirm(true); await o.el.forget.onclick(); await tick();
   assert(!('apiKey' in o.local.d) && !('apiKey' in o.session.d)); assert.strictEqual(o.radios.find(r => r.checked).value, 'session');
+
+  // "List available models": sends the provider and a typed (unsaved) key, fills the suggestions, shows errors
+  o = page('options.js', O); await tick();
+  o.el.provider.value = 'gemini'; o.el.key.value = ' TYPED ';
+  o.reply({ ok: true, models: ['gemini-3.5-flash', 'gemini-2.5-flash'] });
+  await o.el.listModels.onclick(); await tick();
+  assert.strictEqual(JSON.stringify(o.sent[0]), JSON.stringify({ type: 'listModels', provider: 'gemini', apiKey: 'TYPED' }));
+  assert.strictEqual(o.el.modelList.children.map(c => c.value).join(), 'gemini-3.5-flash,gemini-2.5-flash');
+  assert(/2 models found/.test(o.el.modelsMsg.textContent) && o.el.modelsMsg.className === 'ok');
+  o.reply({ ok: false, error: 'No API key for this browser session. Click the AiT.KO toolbar icon to enter it.' });
+  await o.el.listModels.onclick(); await tick();
+  assert(/toolbar icon/.test(o.el.modelsMsg.textContent) && o.el.modelsMsg.className === 'err');
+  o.reply(undefined); await o.el.listModels.onclick(); await tick();
+  assert(/Could not list models/.test(o.el.modelsMsg.textContent));
 
   // earlier-version key: migration notice is shown, and a plain Save does not silently change the key
   const o2 = page('options.js', O); o2.local.d.apiKey = 'LEGACY';

@@ -38,6 +38,7 @@ See the [privacy policy](https://iamcandido.github.io/ait-ko/privacy.html).
   authorization servers, IdPs, network zones, hooks, trusted origins, devices, domains, org and schemas.
 - Fields that look like secrets (client secrets, passwords, API keys) are redacted from results and exports.
 - Looking up members of a group or users of an app needs the object's id; ask for the list first, then use the id.
+- Model names change quickly. Leave the model empty and AiT.KO asks the provider which models your key can use and picks the newest stable Gemini Flash (Claude defaults to Sonnet). Use "List available models" in the options to choose one yourself.
 - Conditions Okta cannot express (empty or missing values, "not equal" that includes users with no value, "does not contain") are applied locally in your browser after the records are fetched.
 
 ## License

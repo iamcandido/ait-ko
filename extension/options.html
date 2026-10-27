@@ -12,6 +12,7 @@
   fieldset { margin: 20px 0 0; padding: 4px 12px 8px; border: 1px solid #dde2e9; border-radius: 6px; }
   legend { font-weight: 600; padding: 0 6px; }
   button { margin-top: 16px; padding: 8px 14px; border: 0; border-radius: 4px; background: #1c2430; color: #fff; font: inherit; cursor: pointer; }
+  button.light { margin-top: 8px; background: #fff; color: #1c2430; border: 1px solid #1c2430; }
   button.secondary { background: #fff; color: #b3261e; border: 1px solid #b3261e; margin-left: 8px; }
   small, .muted { color: #5b6675; }
   .warn { margin-top: 16px; padding: 10px 12px; border: 1px solid #e0a800; background: #fff8e1; border-radius: 6px; }
@@ -33,7 +34,10 @@
 </select>
 
 <label for="model">Model</label>
-<input id="model" placeholder="Empty = default (gemini-2.5-flash or claude-sonnet-5-5)">
+<input id="model" list="modelList" placeholder="Empty = automatic (newest Gemini Flash, or Claude Sonnet)">
+<datalist id="modelList"></datalist>
+<div><button id="listModels" type="button" class="light">List available models</button> <span id="modelsMsg" role="status"></span></div>
+<small>Model names change often. Leave this empty to let AiT.KO choose a working model, or list the ones your key can use and pick one.</small>
 
 <fieldset>
   <legend>How should the API key be stored?</legend>
