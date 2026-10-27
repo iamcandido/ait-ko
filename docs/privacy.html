@@ -27,7 +27,7 @@
 <body>
 
 <h1>AiT.KO – Privacy Policy</h1>
-<p class="meta">Last updated: October 26, 2026</p>
+<p class="meta">Last updated: October 27, 2026</p>
 
 <p>AiT.KO is a browser extension that lets Okta administrators describe what they want to look up in the Okta Admin API (for example users, groups, applications, or system log events) in plain language. It turns the request into a read-only API request, runs it against the administrator's own Okta organization, and lets them export the results to CSV or JSON. This policy explains what data the extension handles and where it goes.</p>
 
@@ -60,7 +60,7 @@
       <td>Your AI provider API key</td>
       <td>Authenticating your requests to the provider</td>
       <td>Sent only to the provider you selected, as an authentication header</td>
-      <td>Stored locally in your browser (<code>chrome.storage.local</code>) until you change or delete it</td>
+      <td>By default, kept only in memory for the current browser session (<code>chrome.storage.session</code>) and discarded when you close the browser. If you choose, it can instead be saved on your computer (<code>chrome.storage.local</code>), either encrypted with a passphrase that you set, or, only after you explicitly confirm, unencrypted. Saved keys stay until you change or delete them.</td>
     </tr>
     <tr>
       <td>Your settings (provider and model name)</td>
@@ -93,7 +93,7 @@
 
 <h2>5. Permissions and why they are needed</h2>
 <ul>
-  <li><strong>storage</strong>: to save your API key, provider, and model choice locally.</li>
+  <li><strong>storage</strong>: to keep your API key (in memory for the browser session by default, or on your computer if you choose) and your provider and model choices.</li>
   <li><strong>Access to <code>*.okta.com</code> and <code>*.oktapreview.com</code></strong>: to display the AiT.KO panel on the Okta Admin Console and to call your own Okta organization's read-only Admin API with your existing session. The panel activates only on hostnames that contain <code>-admin.</code>; on all other Okta pages it does nothing.</li>
   <li><strong>Access to <code>generativelanguage.googleapis.com</code></strong>: to send your request text to the Google Gemini API, if you select that provider.</li>
   <li><strong>Access to <code>api.anthropic.com</code></strong>: to send your request text to the Anthropic API, if you select that provider.</li>
@@ -105,11 +105,11 @@
   <li>The request produced by the AI provider is treated as untrusted and validated before it runs: only allowlisted paths, query parameters, and search operators are accepted, and anything else is rejected. You can see and edit the request before running it, and it is validated again when you run it.</li>
   <li>As a precaution, response fields whose names look like secrets (for example client secrets, passwords, or API keys) are replaced with "[redacted]" before results are displayed or exported.</li>
   <li>Results are rendered as plain text, never as HTML, and CSV exports neutralize spreadsheet formula injection.</li>
-  <li>Your API key is stored in the browser's extension storage, which is not encrypted at rest. Anyone with access to your browser profile on disk could read it. We recommend using a dedicated key that you can revoke at any time.</li>
+  <li>By default, your API key is held only in memory for the browser session and is never readable by the scripts that run inside web pages. You can choose to save it on your computer instead: encrypted with a passphrase (AES-GCM, with the encryption key derived from your passphrase using PBKDF2), or unencrypted. A forgotten passphrase cannot be recovered; you would simply enter the API key again. If you choose the unencrypted option, anyone with access to your browser profile on disk could read the key. Whichever you choose, we recommend a dedicated key that you can revoke at any time.</li>
 </ul>
 
 <h2>7. Retention and deletion</h2>
-<p>The extension keeps no data other than your API key, provider, and model name, all stored locally. You can delete them at any time by clearing the fields on the options page, or by removing the extension, which deletes all of its local data. Data held by an AI provider is governed by that provider's policies.</p>
+<p>The extension keeps no data other than your API key (in memory for the session by default, or on your computer if you choose), provider, and model name. You can delete them at any time with "Forget key" on the options page, or by removing the extension, which deletes all of its local data. Data held by an AI provider is governed by that provider's policies.</p>
 
 <h2>8. Children</h2>
 <p>AiT.KO is a tool for IT administrators and is not directed at children.</p>

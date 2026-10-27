@@ -19,7 +19,8 @@ AiT.KO is an independent project. It is not affiliated with, endorsed by, or spo
 
 1. Clone this repository.
 2. Open `chrome://extensions`, enable Developer mode, click "Load unpacked" and select the `extension/` folder.
-3. Open the extension options and add your API key (a free Google AI Studio key works with Gemini).
+3. Click the AiT.KO toolbar icon (pin it from the puzzle menu) and paste your API key (a free Google AI Studio key works with Gemini).
+   By default the key is kept only for the current browser session, so you enter it again after restarting the browser.
 4. Open your Okta Admin Console (`*-admin.okta.com`) and use the AiT.KO button in the bottom-right corner.
 
 ## Privacy
@@ -28,11 +29,16 @@ See the [privacy policy](https://iamcandido.github.io/ait-ko/privacy.html).
 
 ## Notes
 
-- The API key is stored in `chrome.storage.local`, which is not encrypted at rest. Use a dedicated, revocable key.
+- You choose how the API key is stored, in the extension options:
+  - **This browser session only** (default): kept in memory (`chrome.storage.session`) and forgotten when the browser closes.
+  - **On this computer, encrypted with a passphrase**: AES-GCM with a key derived via PBKDF2; you unlock it once per browser session. A forgotten passphrase cannot be recovered.
+  - **On this computer, not encrypted** (`chrome.storage.local`): convenient, but readable by anyone with access to your browser profile on disk.
+  The key is only ever read by the extension's own pages and service worker, never by the script that runs inside the Okta page. Use a dedicated, revocable key.
 - Only HTTP GET requests are made against Okta, and only to allowlisted resources: users, groups, apps, system log, policies,
   authorization servers, IdPs, network zones, hooks, trusted origins, devices, domains, org and schemas.
 - Fields that look like secrets (client secrets, passwords, API keys) are redacted from results and exports.
 - Looking up members of a group or users of an app needs the object's id; ask for the list first, then use the id.
+- Conditions Okta cannot express (empty or missing values, "not equal" that includes users with no value, "does not contain") are applied locally in your browser after the records are fetched.
 
 ## License
 

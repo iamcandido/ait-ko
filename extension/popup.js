@@ -40,7 +40,9 @@ async function run(fn, okText) {
 }
 
 $('useKey').onclick = () => run(async () => {
-  await ks.applyMode({ mode: 'session', key: $('key').value.trim() });
+  const key = $('key').value.trim();
+  if (!key) throw new Error('Enter the API key.');
+  await ks.applyMode({ mode: 'session', key });
   $('key').value = '';
 }, 'Done.');
 $('unlockBtn').onclick = () => run(async () => {
