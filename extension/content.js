@@ -67,7 +67,10 @@
           </div>
 
           <div id="status" class="hint" role="status"></div>
-          <div class="row"><button class="act" id="settings" hidden>Open AiT.KO settings</button></div>
+          <div class="row">
+            <button class="act" id="settings" hidden>Open AiT.KO settings</button>
+            <button class="act primary" id="reload" hidden>Reload page</button>
+          </div>
           <div class="tbl" id="tblBox" hidden><table id="tbl"></table></div>
         </div>
       </section>
@@ -88,7 +91,11 @@
   $('#stop').onclick = () => ctrl && ctrl.abort();
   $('#csv').onclick = exportCsv;
   $('#json').onclick = exportJson;
-  $('#settings').onclick = () => chrome.runtime.sendMessage({ type: 'openOptions' });
+  $('#settings').onclick = async () => {
+    const r = await send({ type: 'openOptions' });
+    if (r && r.stale) { $('#reload').hidden = false; setStatus(r.error, true); }
+  };
+  $('#reload').onclick = () => location.reload();
   $('#prompt').addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onTranslate();
   });
@@ -100,6 +107,19 @@
     el.className = isErr ? 'err' : 'hint';
   }
 
+  // After the extension is updated or reloaded, a page that was already open keeps a dead connection to it
+  // ("Extension context invalidated"). Reloading the page fixes it, so say so instead of failing silently.
+  async function send(msg) {
+    try {
+      if (!chrome.runtime?.id) throw new Error('Extension context invalidated.');
+      return await chrome.runtime.sendMessage(msg);
+    } catch (e) {
+      const text = String((e && e.message) || e);
+      const stale = /context invalidated|receiving end does not exist/i.test(text);
+      return { ok: false, stale, error: stale ? 'AiT.KO was updated or reloaded. Reload this page to keep using it.' : text };
+    }
+  }
+
   // ---------- Step 1: natural language -> request ----------
   async function onTranslate() {
     const prompt = $('#prompt').value.trim();
@@ -107,9 +127,11 @@
     setStatus('Generating request…');
     $('#planBox').hidden = true;
     $('#settings').hidden = true;
-    const res = await chrome.runtime.sendMessage({ type: 'translate', prompt });
+    $('#reload').hidden = true;
+    const res = await send({ type: 'translate', prompt });
     if (!res?.ok) {
       $('#settings').hidden = !res?.code;   // key problems: offer a shortcut to the settings
+      $('#reload').hidden = !res?.stale;    // dead connection: offer to reload the page
       return setStatus(res?.error || 'Unknown error.', true);
     }
 
