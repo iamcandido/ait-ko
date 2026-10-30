@@ -148,5 +148,13 @@ const tr = t => t.send({ type: 'translate', prompt: 'x' });
   await t.send({ type: 'openOptions' }); assert.strictEqual(t.opened(), true);
   assert.strictEqual(await t.send({ type: 'something-else' }), undefined);
 
+  // ---- the prompt teaches multi-step plans and the apps filter limits
+  const src = fs.readFileSync(__dirname + '/../extension/background.js', 'utf8');
+  const SYSTEM = eval(src.match(/const SYSTEM = (`[\s\S]*?`);/)[1]);
+  for (const needle of ['"steps"', '"pick"', '"for_each"', '{{app.id}}', '{{row.id}}', '_source', 'expand=user', 'never put label or name in "filter"', 'percent-encode']) {
+    assert(SYSTEM.includes(needle), 'prompt is missing: ' + needle);
+  }
+  assert(!SYSTEM.includes('`'), 'no backticks inside the template literal');
+
   console.log('BACKGROUND TESTS PASSED');
 })().catch(e => { console.error(e); process.exit(1); });

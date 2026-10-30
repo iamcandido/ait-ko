@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AiT.KO",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Natural-language, read-only queries for the Okta Admin API, using your already-open admin session.",
   "permissions": [
     "storage"

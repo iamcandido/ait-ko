@@ -3,7 +3,7 @@
 
 const SYSTEM = `Convert natural-language requests into ONE read-only (HTTP GET) request for the Okta Admin API.
 Reply with JSON ONLY, no extra text and no markdown:
-{"request": string|null, "local_filter": object[]|null, "columns": string[], "summary": string, "clarification": string|null}
+{"request": string|null, "local_filter": object[]|null, "steps": object[]|null, "columns": string[], "summary": string, "clarification": string|null}
 
 "request" is a relative URL: path plus query string, for example /api/v1/groups?q=finance
 Never output anything other than GET requests. If the user asks to create, change, delete, deactivate, reset, assign or otherwise modify anything, return "request": null and explain in "clarification" that this tool is read-only.
@@ -29,10 +29,19 @@ Examples:
 "users with an empty country code" -> {"request": "/api/v1/users", "local_filter": [{"path": "profile.countryCode", "op": "empty"}], ...}
 "active users not in Portugal" -> {"request": "/api/v1/users?search=status eq \\"ACTIVE\\"", "local_filter": [{"path": "profile.countryCode", "op": "ne", "value": "PT"}], ...}
 
+Some questions need more than one request, because a later request needs an id found by an earlier one (for example "users assigned to the app named X"). For those, set "request" to null and return "steps": a list of 2 to 4 requests that the extension runs in order. The extension fills in the ids inside the browser, so you never see any results.
+Each step is {"name": string, "request": string, "pick": boolean, "for_each": string, "local_filter": object[], "columns": string[]}. Only "request" is required; every step except the last needs a "name" (lowercase letters, digits, underscore).
+- "pick": true means: run this step, then let the user choose ONE of its rows (automatic when there is only one). Later steps can use {{name.field}}, for example {{app.id}}. Use it to find one object by name.
+- "for_each": "name" means: run this step once per row of the earlier step called "name" (that step must not be a pick step; at most 50 rows). Use {{row.field}} in its request, for example {{row.id}}. Every result row gets a "_source" field with the name of the row it came from, which can be used as a column.
+- Placeholders may only stand where an id or login goes, and only refer to earlier steps. The last step produces the result, and its "columns" are what the user sees.
+Examples of multi-step answers:
+"users assigned to the app Okta Admin Console, with names, emails and country code" -> {"request": null, "steps": [{"name": "app", "request": "/api/v1/apps?q=Okta Admin Console", "pick": true, "columns": ["id", "label", "name", "status"]}, {"request": "/api/v1/apps/{{app.id}}/users?expand=user", "columns": ["_embedded.user.profile.firstName", "_embedded.user.profile.lastName", "_embedded.user.profile.email", "_embedded.user.profile.countryCode", "status"]}], "summary": "..."}
+"members of every group whose name starts with Finance" -> {"request": null, "steps": [{"name": "groups", "request": "/api/v1/groups?q=Finance"}, {"for_each": "groups", "request": "/api/v1/groups/{{row.id}}/users", "columns": ["_source", "profile.login", "profile.email", "status"]}], "summary": "..."}
+
 Per resource:
 - users: "search" with attributes status, id, created, lastUpdated, lastLogin, statusChanged, profile.<attr> (login, email, firstName, lastName, department, title, countryCode in uppercase ISO alpha-2, city, organization, manager, employeeNumber...). status: STAGED, PROVISIONED, ACTIVE, RECOVERY, PASSWORD_EXPIRED, LOCKED_OUT, SUSPENDED, DEPROVISIONED. "q" matches the start of first name, last name or email.
 - groups: "q" matches the start of the name; "search" e.g. profile.name sw "x" or type eq "OKTA_GROUP"; expand=stats adds member counts.
-- apps: "q" matches the start of name/label; "filter" e.g. status eq "ACTIVE", user.id eq "{id}", group.id eq "{id}".
+- apps: "q" matches the start of the app label or name (use it to find an app by name). "filter" accepts ONLY status eq "ACTIVE", user.id eq "{id}" and group.id eq "{id}": never put label or name in "filter". /api/v1/apps/{id}/users returns assignment objects (id is the user's id, plus status, scope and credentials.userName); add expand=user to embed the full user under _embedded.user, for example the column _embedded.user.profile.email.
 - logs (system log): since/until in ISO 8601; "filter" e.g. eventType eq "user.session.start", outcome.result eq "FAILURE", actor.id eq "{id}"; "q" keywords; sortOrder ASCENDING or DESCENDING. Always set "since" for logs; if the user gives no period, use the last 24 hours.
 - other resources: use "q" or "filter" only when the user asks for it.
 

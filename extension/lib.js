@@ -180,9 +180,101 @@
   const describeLocal = filters =>
     filters.map(f => `${f.path} ${LOCAL_LABEL[f.op]}${f.value !== undefined ? ` "${f.value}"` : ''}`).join(' and ');
 
+  // ---- Multi-step plans ----
+  // Some questions need several requests ("users assigned to the app named X": find the app, then list its users).
+  // The AI provider plans the steps from the question alone and never sees any result: ids are filled in here,
+  // in the browser, and every resulting request is validated again against the read-only allowlist.
+  const PLACEHOLDER = /\{\{\s*([a-z][a-z0-9_]{0,20})\.([A-Za-z0-9_.]{1,80})\s*\}\}/g;
+  const NAME_RE = /^[a-z][a-z0-9_]{0,20}$/;
+  const SAFE_VALUE = /^[A-Za-z0-9_.@+-]{1,128}$/;
+  const MAX_STEPS = 4;
+
+  const cleanColumns = list =>
+    (Array.isArray(list) ? list : []).filter(c => typeof c === 'string' && /^[A-Za-z0-9_.]{1,80}$/.test(c)).slice(0, 10);
+
+  // plan: {request, local_filter, columns} for one request, or {steps: [...]} for several.
+  function parseSteps(plan, origin) {
+    let raw;
+    if (plan && Array.isArray(plan.steps) && plan.steps.length) raw = plan.steps;
+    else if (plan && typeof plan.request === 'string' && plan.request) raw = [{ request: plan.request, local_filter: plan.local_filter, columns: plan.columns }];
+    else return { error: 'The plan has no request.' };
+    if (raw.length > MAX_STEPS) return { error: `The plan has too many steps (maximum ${MAX_STEPS}).` };
+
+    const steps = [];
+    const names = new Map();   // name -> { pick }
+    for (let i = 0; i < raw.length; i++) {
+      const s = raw[i];
+      const last = i === raw.length - 1;
+      const fail = msg => ({ error: raw.length > 1 ? `Step ${i + 1}: ${msg}` : msg });
+      if (!s || typeof s !== 'object' || typeof s.request !== 'string' || !s.request) return fail('it has no request.');
+
+      const lf = parseLocalFilters(s.local_filter);
+      if (lf.error) return fail(lf.error);
+
+      let name = null;
+      if (s.name != null) {
+        if (typeof s.name !== 'string' || !NAME_RE.test(s.name) || s.name === 'row' || names.has(s.name)) return fail('its name is invalid or repeated.');
+        name = s.name;
+      }
+      if (!last && !name) return fail('it needs a name, because a later step uses it.');
+
+      const pick = s.pick === true;
+      if (pick && last) return fail('the last step cannot be a "pick" step.');
+
+      let forEach = null;
+      if (s.for_each != null) {
+        if (typeof s.for_each !== 'string' || !names.has(s.for_each) || names.get(s.for_each).pick) return fail('"for_each" must name an earlier step that lists several rows.');
+        if (pick) return fail('a step cannot be both "pick" and "for_each".');
+        forEach = s.for_each;
+      }
+
+      for (const m of s.request.matchAll(PLACEHOLDER)) {
+        const ref = m[1];
+        if (ref === 'row') { if (!forEach) return fail('it uses {{row.…}} without "for_each".'); }
+        else if (!names.has(ref) || !names.get(ref).pick) return fail(`it refers to "${ref}", which is not an earlier "pick" step.`);
+      }
+      if (forEach && !/\{\{\s*row\./.test(s.request)) return fail('"for_each" needs {{row.…}} in the request.');
+
+      // Dry run: with a harmless id in place of every placeholder, the request must pass the full validation.
+      const dryRequest = s.request.replace(PLACEHOLDER, 'x0');
+      if (/\{\{|\}\}/.test(dryRequest)) return fail('it contains a malformed placeholder.');
+      const dry = buildRequest(dryRequest, origin);
+      if (dry.error) return fail(dry.error);
+
+      steps.push({ name, request: s.request, localFilters: lf.filters, columns: cleanColumns(s.columns), pick, forEach });
+      if (name) names.set(name, { pick });
+    }
+    return { steps };
+  }
+
+  // vars: { stepName: row, row: row }. Only plain id-like values are allowed to end up in a URL.
+  function fillPlaceholders(template, vars) {
+    let error = null;
+    const request = template.replace(PLACEHOLDER, (m, ref, path) => {
+      if (error) return m;
+      const row = Object.prototype.hasOwnProperty.call(vars, ref) ? vars[ref] : undefined;
+      const v = row === undefined ? undefined : getPath(row, path);
+      const text = v == null || typeof v === 'object' ? '' : String(v);
+      if (!SAFE_VALUE.test(text) || text === '.' || text === '..') {
+        error = `Cannot use "${path}" from "${ref}": the value is empty or contains characters that are not allowed.`;
+        return m;
+      }
+      return text;
+    });
+    if (!error && /\{\{|\}\}/.test(request)) error = 'The request contains a malformed placeholder.';
+    return error ? { error } : { request };
+  }
+
+  const describeSteps = steps => steps.map((s, i) =>
+    `${i + 1}. ${s.request}` +
+    (s.pick ? '  → you choose one result' : '') +
+    (s.forEach ? `  → once for each result of "${s.forEach}"` : '') +
+    (s.localFilters.length ? `  → then filtered in your browser: ${describeLocal(s.localFilters)}` : ''));
+
   const api = {
     rewriteNe, buildRequest, nextLink, redact, getPath, show, autoColumns, csvEscape, validExpr,
-    parseLocalFilters, matchesLocal, describeLocal
+    parseLocalFilters, matchesLocal, describeLocal,
+    parseSteps, fillPlaceholders, describeSteps
   };
   globalThis.AITKO = api;
   if (typeof module !== 'undefined') module.exports = api;

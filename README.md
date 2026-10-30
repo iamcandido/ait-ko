@@ -37,7 +37,10 @@ See the [privacy policy](https://iamcandido.github.io/ait-ko/privacy.html).
 - Only HTTP GET requests are made against Okta, and only to allowlisted resources: users, groups, apps, system log, policies,
   authorization servers, IdPs, network zones, hooks, trusted origins, devices, domains, org and schemas.
 - Fields that look like secrets (client secrets, passwords, API keys) are redacted from results and exports.
-- Looking up members of a group or users of an app needs the object's id; ask for the list first, then use the id.
+- Questions that need several requests (for example "users assigned to the app Okta Admin Console") run as a short plan,
+  at most 4 steps. The AI provider plans the steps from your question alone: ids found by earlier steps are filled in inside your
+  browser, and the AI provider never sees any Okta result. If several objects match a name, you choose which one. A step can also
+  repeat for each result of an earlier step (at most 50). Every step is validated against the same read-only allowlist.
 - Model names change quickly. Leave the model empty and AiT.KO asks the provider which models your key can use and picks the newest stable Gemini Flash (Claude defaults to Sonnet). Use "List available models" in the options to choose one yourself.
 - Conditions Okta cannot express (empty or missing values, "not equal" that includes users with no value, "does not contain") are applied locally in your browser after the records are fetched.
 

@@ -94,4 +94,60 @@ assert(L.matchesLocal({ profile: { title: 'Senior Dev' } }, [{ path: 'profile.ti
 assert(L.matchesLocal({ profile: { title: 'Senior Dev' } }, [{ path: 'profile.title', op: 'sw', value: 'sen' }]));
 assert.strictEqual(L.describeLocal(E), 'profile.countryCode is empty');
 assert.strictEqual(L.describeLocal(NE), 'profile.countryCode is not "pt"');
+// ---- multi-step plans ----
+const PS = plan => L.parseSteps(plan, O);
+const appPlan = () => ({ steps: [
+  { name: 'app', request: '/api/v1/apps?q=Okta Admin Console', pick: true, columns: ['id', 'label'] },
+  { request: '/api/v1/apps/{{app.id}}/users?expand=user', columns: ['_embedded.user.profile.email', 'bad col!', 5] }
+] });
+let ps = PS(appPlan());
+assert(!ps.error, ps.error);
+assert.strictEqual(ps.steps.length, 2);
+assert.strictEqual(ps.steps[0].pick, true);
+assert.strictEqual(ps.steps[1].columns.join(), '_embedded.user.profile.email', 'invalid column names are dropped');
+// a single request still works, in the old format
+ps = PS({ request: '/api/v1/users?q=ana', local_filter: [{ path: 'profile.countryCode', op: 'empty' }], columns: ['id'] });
+assert(!ps.error && ps.steps.length === 1 && ps.steps[0].localFilters.length === 1);
+assert(PS({}).error && PS({ request: '' }).error && PS(null).error && PS({ steps: [] }).error);
+// structural rules
+const withStep = (i, patch) => { const x = appPlan(); Object.assign(x.steps[i], patch); return x; };
+assert(PS({ steps: Array(5).fill({ name: 'a', request: '/api/v1/users' }) }).error, 'too many steps');
+assert(/needs a name/.test(PS({ steps: [{ request: '/api/v1/apps' }, { request: '/api/v1/users' }] }).error), 'earlier steps need a name');
+assert(/last step cannot/.test(PS({ steps: [{ name: 'a', request: '/api/v1/apps' }, { request: '/api/v1/apps/{{a.id}}/users', pick: true }] }).error));
+assert(/invalid or repeated/.test(PS({ steps: [{ name: 'a', request: '/api/v1/apps' }, { name: 'a', request: '/api/v1/groups' }, { request: '/api/v1/users' }] }).error));
+assert(/invalid or repeated/.test(PS(withStep(0, { name: 'row' })).error), '"row" is reserved');
+assert(/invalid or repeated/.test(PS(withStep(0, { name: 'Bad Name' })).error));
+assert(/not an earlier "pick" step/.test(PS(withStep(0, { pick: false })).error), 'placeholder needs a pick step');
+assert(/not an earlier "pick" step/.test(PS(withStep(1, { request: '/api/v1/apps/{{nope.id}}/users' })).error));
+assert(/without "for_each"/.test(PS(withStep(1, { request: '/api/v1/apps/{{row.id}}/users' })).error));
+assert(/malformed placeholder/.test(PS(withStep(1, { request: '/api/v1/apps/{{app}}/users' })).error));
+assert(/malformed placeholder/.test(PS(withStep(1, { request: '/api/v1/apps/{{app.id/users' })).error));
+const fe = (patch) => ({ steps: [{ name: 'g', request: '/api/v1/groups?q=fin' }, Object.assign({ for_each: 'g', request: '/api/v1/groups/{{row.id}}/users' }, patch)] });
+assert(!PS(fe({})).error, 'valid for_each plan');
+assert(/needs \{\{row/.test(PS(fe({ request: '/api/v1/users' })).error), 'for_each without {{row.}}');
+assert(/must name an earlier step/.test(PS(fe({ for_each: 'zzz' })).error));
+assert(/must name an earlier step/.test(PS({ steps: [{ name: 'g', request: '/api/v1/groups', pick: true }, { for_each: 'g', request: '/api/v1/groups/{{row.id}}/users' }] }).error), 'cannot iterate a pick step');
+assert(/both/.test(PS({ steps: [{ name: 'g', request: '/api/v1/groups' }, { name: 'h', pick: true, for_each: 'g', request: '/api/v1/groups/{{row.id}}/users' }, { request: '/api/v1/users' }] }).error));
+// every step must pass the read-only allowlist, even with placeholders
+assert(/allowlist/.test(PS({ steps: [{ name: 'u', request: '/api/v1/users?q=ana', pick: true }, { request: '/api/v1/users/{{u.id}}/lifecycle/deactivate' }] }).error), 'no writes through placeholders');
+assert(PS({ steps: [{ name: 'u', request: '/api/v1/users?q=ana', pick: true }, { request: '/api/v1/users/{{u.id}}/groups' }] }).steps, 'allowed sub-resource');
+assert(/Step 2/.test(PS(withStep(1, { request: '/api/v1/sessions/{{app.id}}' })).error), 'errors say which step');
+assert(PS({ steps: [{ name: 'a', request: '/api/v1/apps?q=x&after=1', pick: true }, { request: '/api/v1/apps/{{a.id}}/users' }] }).error, 'parameter allowlist applies to every step');
+
+// fillPlaceholders: only id-like values may reach a URL
+const row = { id: '0oa1B2c3', label: 'Okta Admin Console', n: { id: '00u9' }, bad: '../../x', slash: 'a/b', q: 'a?b=1', empty: '', obj: { x: 1 }, dots: '..', mail: 'a.b+c@x.com' };
+assert.strictEqual(L.fillPlaceholders('/api/v1/apps/{{app.id}}/users', { app: row }).request, '/api/v1/apps/0oa1B2c3/users');
+assert.strictEqual(L.fillPlaceholders('/api/v1/apps/{{ app.n.id }}/users', { app: row }).request, '/api/v1/apps/00u9/users');
+assert.strictEqual(L.fillPlaceholders('/api/v1/users/{{row.mail}}/groups', { row }).request, '/api/v1/users/a.b+c@x.com/groups');
+for (const f of ['bad', 'slash', 'q', 'empty', 'obj', 'dots', 'missing']) assert(L.fillPlaceholders(`/api/v1/apps/{{app.${f}}}/users`, { app: row }).error, 'rejects ' + f);
+assert(L.fillPlaceholders('/api/v1/apps/{{ghost.id}}/users', { app: row }).error, 'unknown step');
+assert(L.fillPlaceholders('/api/v1/apps/{{app.id}}/users', { constructor: row }).error, 'no prototype lookups');
+assert(L.fillPlaceholders('/api/v1/apps/{{toString.id}}/users', {}).error, 'no prototype lookups (2)');
+assert(L.fillPlaceholders('{{a.id}}/{{a.bad}}', { a: row }).error, 'one bad value fails the whole request');
+// the filled request still goes through the full validation
+assert(L.buildRequest(L.fillPlaceholders('/api/v1/apps/{{app.id}}/users?expand=user', { app: row }).request, O).url);
+
+const desc = L.describeSteps(PS(fe({})).steps);
+assert(/^1\. \/api\/v1\/groups\?q=fin/.test(desc[0]) && /once for each result of "g"/.test(desc[1]), desc.join('|'));
+assert(/you choose one result/.test(L.describeSteps(PS(appPlan()).steps)[0]));
 console.log('ALL TESTS PASSED');
